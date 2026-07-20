@@ -1,0 +1,55 @@
+name: MLflow CI - Telco Customer Churn
+
+# "Trigger" -> robot ini akan jalan otomatis setiap kali ada push
+# ke branch main, atau bisa dijalankan manual lewat tab Actions di GitHub.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  train-model:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Ambil salinan kode dari repository ini
+      - name: Run actions/checkout@v3
+        uses: actions/checkout@v3
+
+      # 2. Siapkan Python dengan versi yang sama seperti di lokal
+      - name: Set up Python 3.12.7
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.7"
+
+      # 3. Cek environment (sekadar memastikan Python & pip aktif dengan benar)
+      - name: Check Env
+        run: |
+          python --version
+          pip --version
+
+      # 4. Install semua library yang dibutuhkan
+      - name: Install dependencies
+        run: |
+          pip install mlflow==2.19.0 pandas scikit-learn numpy
+
+      # 5. Jalankan MLflow Project -> ini bagian "memasak otomatis"nya
+      - name: Run mlflow project
+        working-directory: MLProject
+        run: |
+          mlflow run . --env-manager=local --experiment-name "Telco Customer Churn - CI"
+
+      # 6. Ambil run_id terbaru dari hasil training, untuk dicatat/dipakai tahap berikutnya
+      - name: Get latest MLflow run_id
+        working-directory: MLProject
+        run: |
+          RUN_ID=$(python -c "
+          import mlflow
+          client = mlflow.tracking.MlflowClient()
+          exp = client.get_experiment_by_name('Telco Customer Churn - CI')
+          runs = client.search_runs(exp.experiment_id, order_by=['start_time DESC'], max_results=1)
+          print(runs[0].info.run_id)
+          ")
+          echo "Latest run_id: $RUN_ID"
+          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
